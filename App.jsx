@@ -1,119 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// ─── System prompt factory ────────────────────────────────────────────────────
-const buildSystem = ({ maxHints, hintsUsed, revealAnswer, hintType, difficulty }) => `
-You are a warm, patient Socratic tutor. Your role is to guide students toward understanding — never to give direct answers.
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
-Current session state:
-- Hints given so far: ${hintsUsed} of ${maxHints} allowed
-- Hint style: ${hintType === 'stepwise' ? 'break problems into smaller concrete steps' : 'ask probing Socratic questions that spark insight'}
-- Difficulty: ${difficulty} (${difficulty === 'easy' ? 'simple language, lots of encouragement' : difficulty === 'hard' ? 'assume solid background, push deeper thinking' : 'balanced language and challenge'})
-- Reveal answer when hints exhausted: ${revealAnswer ? 'YES' : 'NO'}
-
-Rules:
-1. NEVER give the direct answer unless hints are exhausted AND revealAnswer is YES.
-2. Each hint must start with exactly "💡 Hint ${hintsUsed + 1}:" — this is parsed by the UI.
-3. If ${hintsUsed} >= ${maxHints} and revealAnswer is NO: warmly tell the student they've used all hints, encourage them to try once more or ask their teacher.
-4. If ${hintsUsed} >= ${maxHints} and revealAnswer is YES: provide the full answer with clear explanation.
-5. Keep each response concise — 2 to 4 sentences. Students lose focus with walls of text.
-6. Be warm and encouraging. Learning is hard. Celebrate effort.
-7. If the student seems frustrated, acknowledge it before giving the hint.
-`.trim()
-
-// ─── API call ─────────────────────────────────────────────────────────────────
-async function callClaude({ apiKey, messages, system }) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+async function callBackend({ messages, config, hintsUsed }) {
+  const res = await fetch(`${BACKEND_URL}/api/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 600,
-      system,
-      messages,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, config, hintsUsed }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err?.error?.message || `API error ${res.status}`)
+    throw new Error(err?.error || `Server error ${res.status}`)
   }
   const data = await res.json()
-  return data.content?.map(b => b.text || '').join('') || ''
-}
-
-// ─── Components ───────────────────────────────────────────────────────────────
-
-function ApiKeyGate({ onSubmit }) {
-  const [key, setKey] = useState('')
-  const [err, setErr] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async () => {
-    if (!key.trim().startsWith('sk-')) return setErr('Key should start with sk-ant-...')
-    setLoading(true); setErr('')
-    try {
-      await callClaude({ apiKey: key.trim(), messages: [{ role: 'user', content: 'ping' }], system: 'Reply with only the word: pong' })
-      onSubmit(key.trim())
-    } catch (e) {
-      setErr('Could not verify key: ' + e.message)
-    } finally { setLoading(false) }
-  }
-
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 460, animation: 'slideIn 0.4s ease' }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🦉</div>
-          <h1 style={{ fontFamily: 'Lora, serif', fontSize: 32, fontWeight: 600, color: 'var(--ink)', marginBottom: 8 }}>
-            Socratic Tutor
-          </h1>
-          <p style={{ color: 'var(--ink-muted)', fontSize: 15, lineHeight: 1.6 }}>
-            An AI that guides students to answers —<br />never just hands them out.
-          </p>
-        </div>
-
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: 32, boxShadow: '0 4px 24px var(--shadow)' }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 8 }}>
-            Anthropic API Key
-          </label>
-          <input
-            type="password"
-            value={key}
-            onChange={e => setKey(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-            placeholder="sk-ant-..."
-            style={{
-              width: '100%', padding: '12px 14px', borderRadius: 10,
-              border: `1.5px solid ${err ? 'var(--rust)' : 'var(--border)'}`,
-              fontFamily: 'IBM Plex Mono, monospace', fontSize: 14,
-              background: 'var(--cream)', color: 'var(--ink)', outline: 'none',
-              transition: 'border-color 0.2s', marginBottom: 6,
-            }}
-          />
-          {err && <p style={{ color: 'var(--rust)', fontSize: 12, marginBottom: 12 }}>{err}</p>}
-          <p style={{ color: 'var(--ink-faint)', fontSize: 11, marginBottom: 20 }}>
-            Your key is never stored — it lives only in this browser session.
-          </p>
-          <button
-            onClick={handleSubmit}
-            disabled={loading || !key.trim()}
-            style={{
-              width: '100%', padding: '13px 0', borderRadius: 10,
-              background: loading || !key.trim() ? 'var(--border)' : 'var(--ink)',
-              color: loading || !key.trim() ? 'var(--ink-faint)' : '#fff',
-              border: 'none', fontSize: 15, fontWeight: 600, cursor: loading || !key.trim() ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s', letterSpacing: '0.02em',
-            }}
-          >
-            {loading ? 'Verifying…' : 'Start Session →'}
-          </button>
-        </div>
-
-        <p style={{ textAlign: 'center', marginTop: 20, color: 'var(--ink-faint)', fontSize: 12 }}>
-          Get a key at <span style={{ color: 'var(--rust)', fontFamily: 'IBM Plex Mono, monospace' }}>console.anthropic.com</span>
-        </p>
-      </div>
-    </div>
-  )
+  return data.reply
 }
 
 function HintDots({ used, max, exhausted, revealed }) {
@@ -124,9 +24,7 @@ function HintDots({ used, max, exhausted, revealed }) {
         {Array.from({ length: max }).map((_, i) => (
           <div key={i} style={{
             width: 10, height: 10, borderRadius: '50%',
-            background: i < used
-              ? (exhausted && !revealed ? 'var(--rust)' : 'var(--amber)')
-              : 'var(--border)',
+            background: i < used ? (exhausted && !revealed ? 'var(--rust)' : 'var(--amber)') : 'var(--border)',
             transition: 'background 0.3s, transform 0.2s',
             transform: i === used - 1 ? 'scale(1.2)' : 'scale(1)',
           }} />
@@ -288,8 +186,19 @@ function SegmentedControl({ value, options, onChange }) {
   )
 }
 
-// ─── Main chat view ───────────────────────────────────────────────────────────
-function ChatView({ apiKey, onReset }) {
+function TopBtn({ onClick, accent, children }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+      border: `1px solid ${accent ? 'var(--ink)' : 'var(--border)'}`,
+      background: accent ? 'var(--ink)' : 'transparent',
+      color: accent ? '#fff' : 'var(--ink-muted)',
+      transition: 'all 0.15s',
+    }}>{children}</button>
+  )
+}
+
+export default function App() {
   const [config, setConfig] = useState({ maxHints: 4, revealAnswer: false, hintType: 'socratic', difficulty: 'medium' })
   const [hintsUsed, setHintsUsed] = useState(0)
   const [messages, setMessages] = useState([
@@ -321,11 +230,7 @@ function ChatView({ apiKey, onReset }) {
 
     try {
       const apiMessages = nextMessages.map(m => ({ role: m.role, content: m.content }))
-      const reply = await callClaude({
-        apiKey,
-        messages: apiMessages,
-        system: buildSystem({ ...config, hintsUsed }),
-      })
+      const reply = await callBackend({ messages: apiMessages, config, hintsUsed })
 
       const usedHint = reply.includes('💡 Hint')
       if (usedHint) setHintsUsed(h => Math.min(h + 1, config.maxHints))
@@ -339,7 +244,7 @@ function ChatView({ apiKey, onReset }) {
       setLoading(false)
       setTimeout(() => textareaRef.current?.focus(), 50)
     }
-  }, [input, loading, messages, apiKey, config, hintsUsed])
+  }, [input, loading, messages, config, hintsUsed])
 
   const resetSession = () => {
     setMessages([{ role: 'assistant', content: "Fresh start! 🦉 What would you like to work through?" }])
@@ -349,38 +254,28 @@ function ChatView({ apiKey, onReset }) {
     setError('')
   }
 
-  const applyConfig = (c) => {
-    setConfig(c)
-    setHintsUsed(0)
-    resetSession()
-  }
-
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: 760, margin: '0 auto', padding: '0 16px' }}>
-      {showConfig && <ConfigDrawer config={config} setConfig={applyConfig} onClose={() => setShowConfig(false)} />}
+      {showConfig && <ConfigDrawer config={config} setConfig={(c) => { setConfig(c); setHintsUsed(0); resetSession() }} onClose={() => setShowConfig(false)} />}
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 0 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 22 }}>🦉</span>
           <div>
-            <span style={{ fontFamily: 'Lora, serif', fontWeight: 600, fontSize: 18, color: 'var(--ink)' }}>Socratic</span>
-            <span style={{ color: 'var(--ink-faint)', fontSize: 12, marginLeft: 8, fontFamily: 'IBM Plex Mono, monospace' }}>tutor</span>
+            <span style={{ fontFamily: 'Lora, serif', fontWeight: 600, fontSize: 18, color: 'var(--ink)' }}>PassPos</span>
+            <span style={{ color: 'var(--ink-faint)', fontSize: 12, marginLeft: 8, fontFamily: 'IBM Plex Mono, monospace' }}>socratic tutor</span>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <TopBtn onClick={resetSession}>↺ New session</TopBtn>
           <TopBtn onClick={() => setShowConfig(true)} accent>⚙ Configure</TopBtn>
-          <TopBtn onClick={onReset}>Change key</TopBtn>
         </div>
       </div>
 
-      {/* Hint meter */}
       <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <HintDots used={hintsUsed} max={config.maxHints} exhausted={exhausted} revealed={config.revealAnswer} />
       </div>
 
-      {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 0 8px' }}>
         {messages.map((m, i) => <Bubble key={i} msg={m} isNew={newMsgIdx.has(i)} />)}
         {loading && <TypingIndicator />}
@@ -392,13 +287,11 @@ function ChatView({ apiKey, onReset }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div style={{ flexShrink: 0, padding: '12px 0 20px' }}>
         <div style={{
           display: 'flex', gap: 10, alignItems: 'flex-end',
           background: '#fff', border: '1.5px solid var(--border)', borderRadius: 14,
           padding: '10px 12px', boxShadow: '0 2px 12px var(--shadow)',
-          transition: 'border-color 0.2s',
         }}>
           <textarea
             ref={textareaRef}
@@ -426,37 +319,9 @@ function ChatView({ apiKey, onReset }) {
           >→</button>
         </div>
         <p style={{ textAlign: 'center', marginTop: 8, color: 'var(--ink-faint)', fontSize: 11 }}>
-          Enter to send · Shift+Enter for new line · <span style={{ fontFamily: 'IBM Plex Mono, monospace' }}>⚙ Configure</span> to set hint limits
+          Enter to send · Shift+Enter for new line
         </p>
       </div>
     </div>
   )
-}
-
-function TopBtn({ onClick, accent, children }) {
-  return (
-    <button onClick={onClick} style={{
-      padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-      border: `1px solid ${accent ? 'var(--ink)' : 'var(--border)'}`,
-      background: accent ? 'var(--ink)' : 'transparent',
-      color: accent ? '#fff' : 'var(--ink-muted)',
-      transition: 'all 0.15s',
-    }}>{children}</button>
-  )
-}
-
-// ─── Root ─────────────────────────────────────────────────────────────────────
-export default function App() {
-  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('st_key') || '')
-
-  const handleKey = (k) => {
-    sessionStorage.setItem('st_key', k)
-    setApiKey(k)
-  }
-  const handleReset = () => {
-    sessionStorage.removeItem('st_key')
-    setApiKey('')
-  }
-
-  return apiKey ? <ChatView apiKey={apiKey} onReset={handleReset} /> : <ApiKeyGate onSubmit={handleKey} />
 }
