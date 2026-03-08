@@ -1,4 +1,4 @@
-# 🦉 Socratic Tutor
+# 🦉 PassPos Tutor
 
 An AI tutor that guides students toward answers using the Socratic method — never just handing them out.
 
