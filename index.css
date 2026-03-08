@@ -1,0 +1,47 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --cream: #F7F3EC;
+  --cream-dark: #EDE8DF;
+  --ink: #1A1612;
+  --ink-soft: #3D3530;
+  --ink-muted: #7A6F67;
+  --ink-faint: #B8AFA6;
+  --rust: #C4501A;
+  --rust-soft: #F5E8E0;
+  --sage: #3A6B4A;
+  --sage-soft: #DFF0E5;
+  --amber: #B07D1A;
+  --amber-soft: #FDF3D7;
+  --border: #DDD5CA;
+  --shadow: rgba(26,22,18,0.08);
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Outfit', sans-serif;
+  background: var(--cream);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 1; }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
