@@ -200,7 +200,7 @@ function TeacherAgent() {
           parts.push(r.error ? `⚠️ ${r.error}` : `📢 Message sent to students: "${r.message}"`)
         }
 
-        finalReply = parts.join('
+        finalReply = parts.join('\n
 ') || '✅ Done!'
       }
 
