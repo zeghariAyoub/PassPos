@@ -23,11 +23,6 @@ npm run dev
 # open http://localhost:5173
 ```
 
-## How it works
-
-- Teachers/parents enter their Anthropic API key once per session
-- The key is stored only in `sessionStorage` — never sent anywhere except Anthropic's API
-- Students chat with the AI tutor which gives progressive hints, never direct answers
 - Click ⚙ Configure to set: max hints, hint style, difficulty, and whether to reveal the answer
 
 ## Features
